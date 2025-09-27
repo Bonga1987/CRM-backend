@@ -1,0 +1,26 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - DB_HOST=host.docker.internal
+      - DB_USER=postgres
+      - DB_PASS=Thuli1s@
+      - DB_NAME=Car_Rental_Management_System
+      - DB_PORT=5432
+
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Thuli1s@
+      POSTGRES_DB: Car_Rental_Management_System
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
