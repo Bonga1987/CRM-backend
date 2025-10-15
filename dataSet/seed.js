@@ -1,6 +1,7 @@
 import client from "../Database/db.js";
 import { faker } from "@faker-js/faker/locale/en_ZA";
 import bcrypt from "bcrypt";
+import { checkAvailabityQuery } from "../queries/vehicleBookingQuery.js";
 
 const seedStaff = async (count = 6) => {
   try {
@@ -28,7 +29,7 @@ const seedStaff = async (count = 6) => {
   }
 };
 
-const seedCustomers = async (count = 20) => {
+const seedCustomers = async (count = 480) => {
   const passwords = [
     "Dd<k<emNa(|(Q",
     "hK<:cs#X^rC",
@@ -53,7 +54,14 @@ const seedCustomers = async (count = 20) => {
   ];
 
   for (let i = 0; i < count; i++) {
-    const hashedPassword = await bcrypt.hash(passwords[i], 10);
+    // Stronger password with options
+    const strongPassword = faker.internet.password({
+      length: 16, // password length
+      memorable: false, // use random characters
+      pattern: /[A-Za-z0-9!@#$%^&*()]/, // allowed chars
+      prefix: "", // optional prefix
+    });
+    const hashedPassword = await bcrypt.hash(strongPassword, 10);
 
     await client.query(
       `INSERT INTO customers (fullname, address, phonenumber, email, driverslicense, password, profileimage, usertype)
@@ -90,10 +98,27 @@ const seedFeatures = async () => {
 const seedDamageTypes = async () => {
   const types = [
     { name: "Scratch", cost: 500 },
-    { name: "Broken Window", cost: 1500 },
+    { name: "Dent (minor)", cost: 1200 },
+    { name: "Broken Side Mirror", cost: 1500 },
+    { name: "Cracked Windshield", cost: 3500 },
     { name: "Flat Tire", cost: 800 },
-    { name: "Engine Issue", cost: 5000 },
+    { name: "Lost Hubcap", cost: 400 },
+    { name: "Broken Window", cost: 2500 },
+    { name: "Burnt Clutch", cost: 4500 },
+    { name: "Battery Replacement", cost: 2000 },
+    { name: "Bumper Damage", cost: 3000 },
+    { name: "Seat Stain/Damage", cost: 1000 },
+    { name: "Headlight/Taillight Damage", cost: 1800 },
+    { name: "Key Replacement", cost: 2500 },
+    { name: "Engine Issue (minor)", cost: 5000 },
+    { name: "Theft of Radio/Infotainment", cost: 4000 },
+    { name: "AC Not Working", cost: 2500 },
+    { name: "Paint Touch-up", cost: 900 },
+    { name: "Wheel Rim Damage", cost: 2000 },
+    { name: "Interior Plastic Damage", cost: 1200 },
+    { name: "Excessive Cleaning Fee", cost: 700 },
   ];
+
   for (let t of types) {
     await client.query(
       `INSERT INTO damagetypes (name, standardcost) VALUES ($1,$2)`,
@@ -110,7 +135,7 @@ const getRandomFeatures = (features) => {
   return selected.join(", ");
 };
 
-const seedVehicles = async (count = 10) => {
+const seedVehicles = async (count = 1) => {
   // Define vehicle categories
   const categories = [
     "SUV",
@@ -193,15 +218,22 @@ const seedVehicles = async (count = 10) => {
   console.log(`${count} vehicles inserted with features`);
 };
 
-const seedBookings = async (count = 10) => {
+const seedBookings = async (count) => {
   const { rows: customers } = await client.query(
-    `SELECT customerid FROM customers`
+    `SELECT customerid FROM customers WHERE customerid IN (255,390,71,464,455,506)`
   );
   const { rows: vehicles } = await client.query(
     `SELECT vehicleid,priceperday FROM vehicles`
   );
   const { rows: staff } = await client.query(`SELECT staffid FROM staff`);
-  const locations = ["Downtown", "Station", "University", "Airport"];
+  const locations = [
+    "Airport Rd, Kempton Park",
+    "123 Rivonia Rd, Sandton",
+    "45 Main St, CBD",
+    "Maponya Mall, Chris Hani Rd, Soweto",
+    "Airport Rd, Lanseria",
+    "Oxford Rd, Rosebank",
+  ];
 
   for (let i = 0; i < count; i++) {
     const customer = faker.helpers.arrayElement(customers);
@@ -212,125 +244,137 @@ const seedBookings = async (count = 10) => {
     const dropofflocation = faker.helpers.arrayElement(locations);
 
     const pickupdate = faker.date.between({
-      from: "2024-01-01",
-      to: "2025-12-31",
+      from: "2025-10-18",
+      to: "2025-12-16",
     });
     const dropoffdate = faker.date.soon({
       days: faker.number.int({ min: 1, max: 10 }),
       refDate: pickupdate,
     });
     const actualreturndate = faker.date.soon({
-      days: faker.number.int({ min: 1, max: 5 }),
+      days: faker.number.int({ min: 1, max: 2 }),
       refDate: dropoffdate,
     });
-    const status = faker.helpers.arrayElement([
-      "Pending",
-      "Active",
-      "Completed",
-      "Overdue",
+
+    // 1. check availability status of the car
+    const availableVehicle = await client.query(checkAvailabityQuery, [
+      vehicle.vehicleid,
+      dropoffdate,
+      pickupdate,
     ]);
 
-    const res = await client.query(
-      `INSERT INTO bookings 
+    if (availableVehicle.rowCount !== 0) {
+      // Decide booking status based on realistic percentages
+      const rand = Math.random();
+      let status = "Pending";
+      // if (rand < 0.82) status = "Pending"; // 82%
+      // else if (rand < 0.9) status = "Active"; // next 8%
+      // else status = "Active"; // remaining 10%
+
+      // const status = faker.helpers.arrayElement([
+      //   // "Pending",
+      //   // "Active",
+      //   "Completed",
+      //   "Overdue",
+      // ]);
+
+      const res = await client.query(
+        `INSERT INTO bookings 
        (customerid, vehicleid, handledbystaffid, checkedinbystaffid, pickupdate, dropoffdate, actualreturndate, pickuplocation, dropofflocation, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING bookingid,status,vehicleid`,
-      [
-        customer.customerid,
-        vehicle.vehicleid,
-        status !== "Pending" ? handledbystaffid : null,
-        status === "Completed" || status === "Overdue"
-          ? checkedinbystaffid
-          : null,
-        pickupdate,
-        dropoffdate,
-        status === "Completed"
-          ? dropoffdate
-          : status === "Overdue"
-          ? actualreturndate
-          : null,
-        pickuplocation,
-        dropofflocation,
-        status,
-      ]
-    );
-
-    const bookingId = res.rows[0].bookingid;
-    const returnedStatus = res.rows[0].status;
-    const returnedVehicleid = res.rows[0].vehicleid;
-
-    if (returnedStatus === "Completed" || returnedStatus === "Overdue") {
-      const { rows: dmgTypes } = await client.query(
-        `SELECT damagetypeid, standardcost FROM damagetypes`
+        [
+          customer.customerid,
+          vehicle.vehicleid,
+          status !== "Pending" ? handledbystaffid : null,
+          status === "Completed" || status === "Overdue"
+            ? checkedinbystaffid
+            : null,
+          pickupdate,
+          dropoffdate,
+          status === "Completed"
+            ? dropoffdate
+            : status !== "Pending" && status !== "Active" && status !== "Cancel"
+            ? actualreturndate
+            : null,
+          pickuplocation,
+          dropofflocation,
+          status,
+        ]
       );
 
-      //input random actual return date if status is overdue
-      // let actualreturndate = null;
-      // if (returnedStatus === "Overdue") {
-      // }
+      const bookingId = res.rows[0].bookingid;
+      const returnedStatus = res.rows[0].status;
+      const returnedVehicleid = res.rows[0].vehicleid;
 
-      let dmg = null;
-      // Random damage report
-      if (Math.random() < 0.2) {
-        dmg = faker.helpers.arrayElement(dmgTypes);
-        await client.query(
-          `INSERT INTO damagereports (bookingid, vehicleid, damagetypeid, additionalnotes, charge, reportedbystaffid, reportdate)
+      if (returnedStatus === "Completed" || returnedStatus === "Overdue") {
+        const { rows: dmgTypes } = await client.query(
+          `SELECT damagetypeid, standardcost FROM damagetypes`
+        );
+
+        let dmg = null;
+        // Random damage report
+        if (Math.random() < 0.01) {
+          dmg = faker.helpers.arrayElement(dmgTypes);
+          await client.query(
+            `INSERT INTO damagereports (bookingid, vehicleid, damagetypeid, additionalnotes, charge, reportedbystaffid, reportdate)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [
+              bookingId,
+              returnedVehicleid,
+              dmg.damagetypeid,
+              null,
+              dmg.standardcost,
+              checkedinbystaffid,
+              dropoffdate,
+            ]
+          );
+
+          await client.query(
+            `UPDATE Vehicles SET availability = FALSE, isinmaintenance = TRUE WHERE vehicleid = $1;`,
+            [returnedVehicleid]
+          );
+        }
+
+        const startDay = new Date(pickupdate).setHours(0, 0, 0, 0);
+        const endDay = new Date(dropoffdate).setHours(0, 0, 0, 0);
+        const actualEndDay = new Date(actualreturndate).setHours(0, 0, 0, 0);
+
+        //calculate late fee
+        const lateFeePerDay = 50.0;
+        const lateDays = Math.max(
+          1,
+          Math.ceil(
+            (new Date(actualEndDay) - new Date(endDay)) / (1000 * 60 * 60 * 24)
+          )
+        );
+
+        const latefee = lateFeePerDay * lateDays;
+
+        //calculte rental amount
+        const rentalDays = Math.max(
+          1,
+          Math.ceil(
+            (new Date(endDay) - new Date(startDay)) / (1000 * 60 * 60 * 24)
+          ) + 1
+        );
+
+        // Invoice
+        await client.query(
+          `INSERT INTO invoices (bookingid, amount, latefees, damages, paymentstatus, generateddate)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
           [
             bookingId,
-            returnedVehicleid,
-            dmg.damagetypeid,
-            faker.lorem.sentence(),
-            dmg.standardcost,
-            checkedinbystaffid,
+            vehicle.priceperday * rentalDays,
+            status === "Overdue" ? latefee : 0,
+            dmg === null ? 0 : dmg.standardcost,
+            faker.helpers.arrayElement(["Paid", "Unpaid"]),
             new Date(),
           ]
         );
-
-        await client.query(
-          `UPDATE Vehicles SET availability = FALSE, isinmaintenance = TRUE WHERE vehicleid = $1;`,
-          [returnedVehicleid]
-        );
       }
-
-      const startDay = new Date(pickupdate).setHours(0, 0, 0, 0);
-      const endDay = new Date(dropoffdate).setHours(0, 0, 0, 0);
-      const actualEndDay = new Date(actualreturndate).setHours(0, 0, 0, 0);
-
-      //calculate late fee
-      const lateFeePerDay = 50.0;
-      const lateDays = Math.max(
-        1,
-        Math.ceil(
-          (new Date(actualEndDay) - new Date(endDay)) / (1000 * 60 * 60 * 24)
-        )
-      );
-
-      const latefee = lateFeePerDay * lateDays;
-
-      //calculte rental amount
-      const rentalDays = Math.max(
-        1,
-        Math.ceil(
-          (new Date(endDay) - new Date(startDay)) / (1000 * 60 * 60 * 24)
-        ) + 1
-      );
-
-      // Invoice
-      await client.query(
-        `INSERT INTO invoices (bookingid, amount, latefees, damages, paymentstatus, generateddate)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-        [
-          bookingId,
-          vehicle.priceperday * rentalDays,
-          status === "Overdue" ? latefee : 0,
-          dmg === null ? 0 : dmg.standardcost,
-          faker.helpers.arrayElement(["Paid", "Unpaid"]),
-          new Date(),
-        ]
-      );
     }
+    console.log(`${count} bookings with invoices and some damages inserted`);
   }
-  console.log(`${count} bookings with invoices and some damages inserted`);
 };
 
 const seedMaintenance = async (count = 10) => {
@@ -358,9 +402,10 @@ const main = async (re, res) => {
     // await seedCustomers();
     // await seedDamageTypes();
     // await seedVehicles();
-    await seedBookings();
-    // await seedFeatures();
-    // await seedMaintenance(10);
+    await seedBookings(5);
+
+    //  await seedFeatures();
+    //  await seedMaintenance(10);
 
     console.log("Seeding complete!");
     res.send({ success: true });

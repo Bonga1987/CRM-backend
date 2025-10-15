@@ -8,6 +8,7 @@ import {
   loginStaff,
   updateStaffProfile,
   getFrequentCustomers,
+  updatePassword,
 } from "../controllers/customerManagementController.js";
 
 const userRouter = express.Router(); //use to create get,post, etc methods
@@ -22,5 +23,6 @@ userRouter.post("/login/staff", loginStaff);
 userRouter.get("/:id", getUserById);
 userRouter.post("/update", updateProfile);
 userRouter.post("/update/staff", updateStaffProfile);
+userRouter.post("/updatePassword", updatePassword);
 
 export default userRouter;

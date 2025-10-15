@@ -16,6 +16,8 @@ import {
   getPopularCategoriesQuery,
   countTotalVehicleByCategoryQuery,
   getFiltersQuery,
+  getPopularVehiclesQuery,
+  getDamageReportQuery,
 } from "../queries/vehicleManagementQuery.js";
 
 const getVehiclesInMaintenance = async (req, res) => {
@@ -31,6 +33,23 @@ const getVehiclesInMaintenance = async (req, res) => {
     res.send(result.rows);
   } catch (error) {
     console.error("Error retreiving vehicles in maintenance:", error.message);
+    throw error;
+  }
+};
+
+const getDamageReport = async (req, res) => {
+  try {
+    const result = await client.query(getDamageReportQuery);
+
+    if (result.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    console.log("Damage report retrieved successfully");
+    res.send(result.rows);
+  } catch (error) {
+    console.error("Error retreiving damage report:", error.message);
     throw error;
   }
 };
@@ -116,6 +135,23 @@ const getPopularCategories = async (req, res) => {
     res.send(result.rows);
   } catch (error) {
     console.error("Error retrieving popular categories:", error);
+    throw error;
+  }
+};
+
+const getPopularVehicles = async (req, res) => {
+  try {
+    const result = await client.query(getPopularVehiclesQuery);
+
+    if (result.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    console.log("Popular vehicles retrieved");
+    res.send(result.rows);
+  } catch (error) {
+    console.error("Error retrieving popular vehicles:", error);
     throw error;
   }
 };
@@ -413,4 +449,6 @@ export {
   getPopularCategories,
   countTotalVehicleByCategory,
   getFilters,
+  getPopularVehicles,
+  getDamageReport,
 };

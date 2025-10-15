@@ -24,9 +24,18 @@ import {
   getRentalByMonthsQuery,
   getBookingByCustomerIDQuery,
   updateHasBeenNotifiedBookingQuery,
+  cancelBookingQuery,
+  getBookedDatesByVehicleIdQuery,
+  getRevenuePerYearQuery,
+  getBookingsPerYearQuery,
+  getCostPerYearQuery,
+  getRevenueByMonthQuery,
+  generateReceiptQuery,
+  getReceiptByInvoiceIdQuery,
 } from "../queries/vehicleBookingQuery.js";
 import validator from "validator";
 import { formatedDate, validateDamageReports } from "../common/utils/utils.js";
+import dayjs from "dayjs";
 
 const getInvoicesByCustomerId = async (req, res) => {
   try {
@@ -129,8 +138,8 @@ const reserveVehicle = async (req, res) => {
     // 1. check availability status of the car
     const availableVehicle = await client.query(checkAvailabityQuery, [
       vehicleid,
-      pickupdate,
       dropoffdate,
+      pickupdate,
     ]);
 
     if (availableVehicle.rowCount === 0) {
@@ -192,17 +201,17 @@ const updateBooking = async (req, res) => {
       return;
     }
 
-    // 1. check availability status of the car
-    const availableVehicle = await client.query(checkAvailabityQuery, [
-      vehicleid,
-      pickupdate,
-      dropoffdate,
-    ]);
+    // // 1. check availability status of the car
+    // const availableVehicle = await client.query(checkAvailabityQuery, [
+    //   vehicleid,
+    //   dropoffdate,
+    //   pickupdate,
+    // ]);
 
-    if (availableVehicle.rowCount === 0) {
-      res.send({ message: "Unavailable" });
-      return;
-    }
+    // if (availableVehicle.rowCount === 0) {
+    //   res.send({ message: "Unavailable" });
+    //   return;
+    // }
 
     //  // 2. make booking
     const result = await client.query(updateBookingQuery, [
@@ -306,21 +315,41 @@ const checkinVehicle = async (req, res) => {
     const endDay = new Date(dropoffdate).setHours(0, 0, 0, 0);
     const actualEndDay = new Date(actualReturnDate).setHours(0, 0, 0, 0);
 
-    //calculate rental days
-    const rentalDays = Math.max(
-      1,
-      Math.ceil(
-        (new Date(endDay) - new Date(startDay)) / (1000 * 60 * 60 * 24)
-      ) + 1
-    );
+    let lateDays = 0;
+    let rentalDays = 0;
+    if (dayjs(actualEndDay).isSame(dayjs(endDay))) {
+      //calculate rental days using dropoffdate
+      rentalDays = Math.max(
+        1,
+        Math.ceil(
+          (new Date(endDay) - new Date(startDay)) / (1000 * 60 * 60 * 24)
+        ) + 1
+      );
+    } else if (dayjs(actualEndDay).isBefore(dayjs(endDay))) {
+      //calculate rental days using actualReturnDate
+      rentalDays = Math.max(
+        1,
+        Math.ceil(
+          (new Date(endDay) - new Date(startDay)) / (1000 * 60 * 60 * 24)
+        ) + 1
+      );
+    } else {
+      //calculate rental days
+      rentalDays = Math.max(
+        1,
+        Math.ceil(
+          (new Date(endDay) - new Date(startDay)) / (1000 * 60 * 60 * 24)
+        ) + 1
+      );
 
-    //calculate late days
-    const lateDays = Math.max(
-      1,
-      Math.ceil(
-        (new Date(actualEndDay) - new Date(endDay)) / (1000 * 60 * 60 * 24)
-      )
-    );
+      //calculate late days
+      lateDays = Math.max(
+        1,
+        Math.ceil(
+          (new Date(actualEndDay) - new Date(endDay)) / (1000 * 60 * 60 * 24)
+        )
+      );
+    }
 
     //check if invoice exist
     const invoiceCheck = await client.query(checkInvoiceExistQuery, [
@@ -605,8 +634,9 @@ const rescheduleBooking = async (req, res) => {
 };
 
 const payInvoice = async (req, res) => {
-  const { invoiceid } = req.body;
+  const { invoiceid, amount } = req.body;
   try {
+    await client.query("BEGIN");
     const result = await client.query(payInvoiceQuery, [invoiceid]);
 
     if (result.rowCount === 0) {
@@ -614,14 +644,50 @@ const payInvoice = async (req, res) => {
       return;
     }
 
-    console.log("Invoice paid: ", result.rows[0].invoiceid);
+    const receiptResult = await client.query(generateReceiptQuery, [
+      invoiceid,
+      amount,
+    ]);
+
+    if (receiptResult.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    console.log(
+      `Invoice: ${result.rows[0].invoiceid} paid and receipt generated: ${receiptResult.rows[0].receiptid} `
+    );
     res.send(result.rows);
+    await client.query("COMMIT");
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error paying invoice: ", error);
     throw error;
   }
 };
 
+const cancelBooking = async (req, res) => {
+  const { bookingid } = req.body;
+  try {
+    const result = await client.query(cancelBookingQuery, [
+      "Cancel",
+      bookingid,
+    ]);
+
+    if (result.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    console.log("Booking cancelled: ", result.rows[0].bookingid);
+    res.send(result.rows);
+  } catch (error) {
+    console.error("Error cancelling booking: ", error);
+    throw error;
+  }
+};
+
+//updates the hasbeennotified field when the vehicle checkin notification has been received by customer
 const updateHasBeenNotifiedBooking = async (req, res) => {
   const { bookingid } = req.body;
   try {
@@ -638,6 +704,138 @@ const updateHasBeenNotifiedBooking = async (req, res) => {
     res.send(result.rows);
   } catch (error) {
     console.error("Error updating booking hasBeenNotified: ", error);
+    throw error;
+  }
+};
+
+const getDatesBetween = (startDate, endDate) => {
+  let dates = [];
+  let current = dayjs(startDate);
+
+  while (current.isBefore(dayjs(endDate)) || current.isSame(dayjs(endDate))) {
+    dates.push(current.format("YYYY-MM-DD"));
+    current = current.add(1, "day");
+  }
+
+  return dates;
+};
+
+const getBookedDatesByVehicleId = async (req, res) => {
+  const { vehicleid } = req.body;
+  try {
+    const result = await client.query(getBookedDatesByVehicleIdQuery, [
+      vehicleid,
+    ]);
+
+    if (result.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    let allBookedDates = [];
+
+    result.rows?.map((item) => {
+      const datesBetween = getDatesBetween(item.pickupdate, item.dropoffdate);
+      allBookedDates = [...new Set([...allBookedDates, ...datesBetween])];
+    });
+
+    console.log("Retrieved booked dates for vehicle: ", vehicleid);
+
+    res.send(allBookedDates);
+  } catch (error) {
+    console.error("Error retrieving booking: ", error);
+    throw error;
+  }
+};
+
+const getRevenuePerYear = async (req, res) => {
+  try {
+    const result = await client.query(getRevenuePerYearQuery);
+
+    if (result.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    console.log("Retrieved Revenue by year: ");
+
+    res.send(result.rows);
+  } catch (error) {
+    console.error("Error retrieving revenue by year", error);
+    throw error;
+  }
+};
+
+const getBookingsPerYear = async (req, res) => {
+  try {
+    const result = await client.query(getBookingsPerYearQuery);
+
+    if (result.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    console.log("Retrieved total bookings per year");
+
+    res.send(result.rows);
+  } catch (error) {
+    console.error("Error retrieving total bookings per year: ", error);
+    throw error;
+  }
+};
+
+const getCostPerYear = async (req, res) => {
+  try {
+    const result = await client.query(getCostPerYearQuery);
+
+    if (result.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    console.log("Retrieved cost per year");
+
+    res.send(result.rows);
+  } catch (error) {
+    console.error("Error retrieving cost per year: ", error);
+    throw error;
+  }
+};
+
+const getRevenueByMonth = async (req, res) => {
+  try {
+    const result = await client.query(getRevenueByMonthQuery);
+
+    if (result.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    console.log("Retrieved revenue per month");
+
+    res.send(result.rows);
+  } catch (error) {
+    console.error("Error retrieving revenue per month: ", error);
+    throw error;
+  }
+};
+
+const getReceiptByInvoiceId = async (req, res) => {
+  try {
+    const { invoiceid } = req.body;
+
+    const result = await client.query(getReceiptByInvoiceIdQuery, [invoiceid]);
+
+    if (result.rowCount === 0) {
+      res.send(false);
+      return;
+    }
+
+    console.log("Retrieved receipt for invoice: ", invoiceid);
+
+    res.send(result.rows);
+  } catch (error) {
+    console.error("Error retrieving receipt: ", error);
     throw error;
   }
 };
@@ -661,4 +859,11 @@ export {
   getRentalByMonths,
   getBookingByCustomerID,
   updateHasBeenNotifiedBooking,
+  cancelBooking,
+  getBookedDatesByVehicleId,
+  getRevenuePerYear,
+  getBookingsPerYear,
+  getCostPerYear,
+  getRevenueByMonth,
+  getReceiptByInvoiceId,
 };

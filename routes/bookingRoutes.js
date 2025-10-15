@@ -18,6 +18,13 @@ import {
   getRentalByMonths,
   getBookingByCustomerID,
   updateHasBeenNotifiedBooking,
+  cancelBooking,
+  getBookedDatesByVehicleId,
+  getRevenuePerYear,
+  getBookingsPerYear,
+  getCostPerYear,
+  getRevenueByMonth,
+  getReceiptByInvoiceId,
 } from "../controllers/vehicleBookingController.js";
 import { payForBooking } from "../controllers/checkoutController.js";
 
@@ -35,6 +42,8 @@ bookingRouter.post(
   "/updateHasBeenNotifiedBooking",
   updateHasBeenNotifiedBooking
 );
+bookingRouter.post("/cancel", cancelBooking);
+bookingRouter.post("/bookedDatesByVehicle", getBookedDatesByVehicleId);
 bookingRouter.get("/rentalHistory/:customerid", getRentalHistory);
 bookingRouter.get("/currentBookings/:customerid", getCurrentBookings);
 bookingRouter.get("/booking/:bookingid", getBookingDetails);
@@ -44,8 +53,13 @@ bookingRouter.get("/invoices", getAllInvoices);
 bookingRouter.get("/invoices/:invoiceid", getInvoiceById);
 bookingRouter.get("/invoices/customer/:customerid", getInvoicesByCustomerId);
 bookingRouter.post("/invoices/pay", payForBooking);
+bookingRouter.post("/ReceiptByInvoiceId", getReceiptByInvoiceId);
 bookingRouter.post("/invoices/updateStatus", payInvoice);
 bookingRouter.get("/overdueReturns", getOverdueReturns);
 bookingRouter.get("/rentalByMonths", getRentalByMonths);
+bookingRouter.get("/RevenuePerYear", getRevenuePerYear);
+bookingRouter.get("/BookingsPerYear", getBookingsPerYear);
+bookingRouter.get("/CostPerYear", getCostPerYear);
+bookingRouter.get("/RevenueByMonth", getRevenueByMonth);
 
 export default bookingRouter;
