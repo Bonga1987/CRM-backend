@@ -10,6 +10,8 @@ import {
   checkStaffEmailExistQuery,
   updateStaffProfileQuery,
   getFrequentCustomersQuery,
+  getOldPasswordQuery,
+  updatePasswordQuery,
 } from "../queries/customerManagementQuery.js";
 import bcrypt from "bcrypt";
 import validator from "validator";
@@ -25,70 +27,73 @@ const registerUser = async (req, res) => {
       driverslicense,
       password,
       confirmPassword,
+      licenseissuedate,
+      licenseexpirydate,
+      licensecode,
     } = req.body;
 
-    // 2️ Validation
-    if (
-      !fullname ||
-      !address ||
-      !phonenumber ||
-      !email ||
-      !driverslicense ||
-      !password ||
-      !confirmPassword
-    ) {
-      res.send({ message: "All fields are required" });
-      return;
-    }
+    // // 2️ Validation
+    // if (
+    //   !fullname ||
+    //   !address ||
+    //   !phonenumber ||
+    //   !email ||
+    //   !driverslicense ||
+    //   !password ||
+    //   !confirmPassword
+    // ) {
+    //   res.send({ message: "All fields are required" });
+    //   return;
+    // }
 
-    // 1️ Sanitization
-    fullname = validator.trim(fullname);
-    address = validator.trim(address);
-    phonenumber = validator.trim(phonenumber);
-    email = validator.normalizeEmail(email);
-    driverslicense = validator.trim(driverslicense);
-    //license_expiry = validator.trim(license_expiry);
-    password = validator.trim(password);
+    // // 1️ Sanitization
+    // fullname = validator.trim(fullname);
+    // address = validator.trim(address);
+    // phonenumber = validator.trim(phonenumber);
+    // email = validator.normalizeEmail(email);
+    // driverslicense = validator.trim(driverslicense);
+    // //license_expiry = validator.trim(license_expiry);
+    // password = validator.trim(password);
 
-    if (
-      !validator.isStrongPassword(password, {
-        minLength: 8,
-        minNumbers: 1,
-        minSymbols: 1,
-      })
-    ) {
-      res.send({
-        message:
-          "Password must be at least 8 characters, include a number and a symbol",
-      });
-      return;
-    }
+    // if (
+    //   !validator.isStrongPassword(password, {
+    //     minLength: 8,
+    //     minNumbers: 1,
+    //     minSymbols: 1,
+    //   })
+    // ) {
+    //   res.send({
+    //     message:
+    //       "Password must be at least 8 characters, include a number and a symbol",
+    //   });
+    //   return;
+    // }
 
-    if (!validator.isLength(fullname, { min: 2, max: 100 })) {
-      res.send({ message: "fullname must be between 2 and 100 characters" });
-      return;
-    }
+    // if (!validator.isLength(fullname, { min: 2, max: 100 })) {
+    //   res.send({ message: "fullname must be between 2 and 100 characters" });
+    //   return;
+    // }
 
-    if (!validator.isAlphanumeric(driverslicense)) {
-      res.send({ message: "License number must be alphanumeric" });
-      return;
-    }
+    // if (!validator.isAlphanumeric(driverslicense)) {
+    //   res.send({ message: "License number must be alphanumeric" });
+    //   return;
+    // }
 
-    if (!validator.isEmail(email)) {
-      res.send({ message: "Invalid email address" });
-      return;
-    }
+    // if (!validator.isEmail(email)) {
+    //   res.send({ message: "Invalid email address" });
+    //   return;
+    // }
 
-    // Passwords match check
-    if (password !== confirmPassword) {
-      res.send({ message: "Passwords do not match." });
-      return;
-    }
+    // // Passwords match check
+    // if (password !== confirmPassword) {
+    //   res.send({ message: "Passwords do not match." });
+    //   return;
+    // }
 
     // 3️ Check if email already exists
     const existingUser = await client.query(checkEmailExistQuery, [email]);
     if (existingUser.rowCount > 0) {
-      res.send({ message: "Email is already registered" });
+      res.send({ message: "Exist" });
       return;
     }
 
@@ -103,6 +108,9 @@ const registerUser = async (req, res) => {
       email,
       driverslicense,
       hashedPassword,
+      licenseissuedate,
+      licenseexpirydate,
+      licensecode,
     ]);
 
     console.log("User registered, ID:", result.rows[0].customerid);
@@ -196,45 +204,54 @@ const registerStaff = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    let { fullname, address, phonenumber, email, driverslicense, customerid } =
-      req.body;
+    let {
+      fullname,
+      address,
+      phonenumber,
+      email,
+      driverslicense,
+      customerid,
+      licensecode,
+      licenseissuedate,
+      licenseexpirydate,
+    } = req.body;
 
     // 2️ Validation
-    if (
-      !fullname ||
-      !address ||
-      !phonenumber ||
-      !email ||
-      !driverslicense ||
-      !customerid
-    ) {
-      res.send({ message: "All fields are required" });
-      return;
-    }
+    // if (
+    //   !fullname ||
+    //   !address ||
+    //   !phonenumber ||
+    //   !email ||
+    //   !driverslicense ||
+    //   !customerid
+    // ) {
+    //   res.send({ message: "All fields are required" });
+    //   return;
+    // }
 
     // 1️ Sanitization
-    fullname = validator.trim(fullname);
-    address = validator.trim(address);
-    phonenumber = validator.trim(phonenumber);
-    email = validator.normalizeEmail(email);
-    driverslicense = validator.trim(driverslicense);
-    customerid = validator.trim(String(customerid));
+    // fullname = validator.trim(fullname);
+    // address = validator.trim(address);
+    // phonenumber = validator.trim(phonenumber);
+    // email = validator.normalizeEmail(email);
+    // driverslicense = validator.trim(driverslicense);
+    // customerid = validator.trim(String(customerid));
     //license_expiry = validator.trim(license_expiry);
 
-    if (!validator.isLength(fullname, { min: 2, max: 100 })) {
-      res.send({ message: "fullname must be between 2 and 100 characters" });
-      return;
-    }
+    // if (!validator.isLength(fullname, { min: 2, max: 100 })) {
+    //   res.send({ message: "fullname must be between 2 and 100 characters" });
+    //   return;
+    // }
 
-    if (!validator.isAlphanumeric(driverslicense)) {
-      res.send({ message: "License number must be alphanumeric" });
-      return;
-    }
+    // if (!validator.isAlphanumeric(driverslicense)) {
+    //   res.send({ message: "License number must be alphanumeric" });
+    //   return;
+    // }
 
-    if (!validator.isEmail(email)) {
-      res.send({ message: "Invalid email address" });
-      return;
-    }
+    // if (!validator.isEmail(email)) {
+    //   res.send({ message: "Invalid email address" });
+    //   return;
+    // }
 
     // 5️ Insert into database
     const result = await client.query(updateProfileQuery, [
@@ -244,6 +261,9 @@ const updateProfile = async (req, res) => {
       email,
       driverslicense,
       customerid,
+      licensecode,
+      licenseissuedate,
+      licenseexpirydate,
     ]);
 
     console.log("User profile updated, ID:", result.rows[0].customerid);
@@ -339,6 +359,9 @@ const loginUser = async (req, res) => {
         driverslicense: result.rows[0].driverslicense,
         profileimage: result.rows[0].profileimage,
         usertype: result.rows[0].usertype,
+        licenseissuedate: result.rows[0].licenseissuedate,
+        licenseexpirydate: result.rows[0].licenseexpirydate,
+        licensecode: result.rows[0].licensecode,
       };
 
       // 5️ Generate JWT token
@@ -451,6 +474,33 @@ const getFrequentCustomers = async (req, res) => {
   }
 };
 
+const updatePassword = async (req, res) => {
+  const { customerid, currentPassword, newPassword } = req.body;
+
+  try {
+    const result = await client.query(getOldPasswordQuery, [customerid]);
+    if (result.rowCount === 0) {
+      res.send({ message: "User not found" });
+      return;
+    }
+
+    const user = result.rows[0];
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      res.send({ message: "Incorrect" });
+      return;
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    await client.query(updatePasswordQuery, [hashedNewPassword, customerid]);
+
+    res.send({ message: "Success" });
+  } catch (error) {
+    console.error("Change password error:", error);
+    throw error;
+  }
+};
+
 export {
   registerUser,
   loginUser,
@@ -460,4 +510,5 @@ export {
   loginStaff,
   updateStaffProfile,
   getFrequentCustomers,
+  updatePassword,
 };

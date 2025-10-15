@@ -41,38 +41,52 @@ const updateVehicleQuery = `
   RETURNING vehicleid;
 `;
 
-const getMostRentedVehiclesQuery = `SELECT 
-  v.vehicleid,
-  v.make || ' ' || v.model as vehicle,
-  COUNT(b.BookingID) AS totalrentals
-FROM vehicles v
-JOIN Bookings b ON v.vehicleid = b.vehicleid
-GROUP BY v.vehicleid, v.make, v.model
-HAVING COUNT(b.BookingID) >= 8
-ORDER BY TotalRentals DESC;`;
-
 const getPopularCategoriesQuery = `SELECT 
   v.category as name,
   COUNT(b.BookingID) AS value
 FROM vehicles v
 JOIN Bookings b ON v.vehicleid = b.vehicleid
 GROUP BY v.category
-HAVING COUNT(b.BookingID) >= 8
+HAVING COUNT(b.BookingID) >= 30
 ORDER BY value DESC;`;
 
 const getAvailableActiveVehiclesQuery = `
   SELECT * FROM Vehicles 
-  WHERE availability = TRUE AND isinmaintenance = FALSE AND isactive = TRUE;
+  WHERE availability = TRUE AND isinmaintenance = FALSE AND isactive = TRUE
+  ORDER BY vehicleid DESC;
 `;
 
 const getAllVehiclesQuery = `
-  SELECT * FROM Vehicles;
+SELECT * FROM Vehicles
+ORDER BY vehicleid DESC;
 `;
 
-const getVehiclesInMaintenanceQuery = `SELECT * FROM vehicles v JOIN DamageReports dr
-ON v.vehicleid = dr.vehicleid JOIN damagetypes dt
-ON dr.damagetypeid = dt.damagetypeid
-WHERE v.isinmaintenance = TRUE AND v.isactive = TRUE`;
+const getVehiclesInMaintenanceQuery = `
+SELECT 
+  v.vehicleid,
+  v.make,
+  v.model,
+  v.isactive,
+  v.isinmaintenance,
+  v.year,
+  dr.reportdate,
+  dr.bookingid,
+  SUM(dr.charge) AS total_charge,
+  STRING_AGG(dt.name, ', ') AS damages
+FROM vehicles v
+JOIN DamageReports dr 
+  ON v.vehicleid = dr.vehicleid
+JOIN damagetypes dt 
+  ON dr.damagetypeid = dt.damagetypeid
+WHERE v.isinmaintenance = TRUE 
+  AND v.isactive = TRUE
+  AND dr.bookingid = (
+    SELECT MAX(dr2.bookingid)
+    FROM DamageReports dr2
+    WHERE dr2.vehicleid = v.vehicleid
+  )
+GROUP BY v.vehicleid, v.make, v.model, dr.bookingid,v.isinmaintenance,v.isactive,v.year,dr.reportdate;
+`;
 
 const checkoutOfMaintenanceQuery = `UPDATE vehicles 
 SET availability = TRUE, isinmaintenance = FALSE 
@@ -93,7 +107,7 @@ GROUP BY category
 
 const countTotalVehicleByCategoryQuery = `SELECT COUNT(*) AS cat_total, category, ROW_NUMBER() OVER (ORDER BY category) AS categoryid
 FROM Vehicles
-WHERE Availability = TRUE AND isActive = TRUE
+WHERE isActive = TRUE
 GROUP BY category`;
 
 const countMaintainedVehiclesQuery = `
@@ -120,12 +134,56 @@ const baseVehicleSearchQuery = `
   `;
 
 const getFiltersQuery = `SELECT 
-    ARRAY_AGG(DISTINCT make) AS makes,
-    ARRAY_AGG(DISTINCT model) AS models,
-    ARRAY_AGG(DISTINCT year) AS years,
-    ARRAY_AGG(DISTINCT category) AS categories,
-    ARRAY_AGG(DISTINCT features) AS features
-FROM vehicles;`;
+  ARRAY_AGG(DISTINCT make) AS makes,
+  ARRAY_AGG(DISTINCT model) AS models,
+  ARRAY_AGG(DISTINCT year) AS years,
+  ARRAY_AGG(DISTINCT category) AS categories,
+  ARRAY_AGG(DISTINCT TRIM(f)) AS features
+FROM vehicles, unnest(string_to_array(features, ',')) AS f;`;
+
+const getMostRentedVehiclesQuery = `SELECT 
+  v.vehicleid,
+  v.make || ' ' || v.model as vehicle,
+  COUNT(b.BookingID) AS totalrentals
+FROM vehicles v
+JOIN Bookings b ON v.vehicleid = b.vehicleid
+WHERE v.isactive = TRUE
+GROUP BY v.vehicleid, v.make, v.model
+HAVING COUNT(b.BookingID) >= 30
+ORDER BY TotalRentals DESC;`;
+
+const getPopularVehiclesQuery = `
+SELECT 
+  v.*,
+  COUNT(b.BookingID) AS value
+FROM vehicles v
+JOIN Bookings b ON v.vehicleid = b.vehicleid
+WHERE v.availability = TRUE AND v.isactive = TRUE AND v.isinmaintenance = FALSE
+GROUP BY v.vehicleid
+HAVING COUNT(b.BookingID) >= 30
+ORDER BY value DESC;
+`;
+
+const getDamageReportQuery = `
+SELECT 
+  v.vehicleid,
+  v.make,
+  v.model,
+  v.year,
+  dr.reportdate,
+  dr.bookingid,
+  dr.damageid,
+  SUM(dr.charge) AS total_charge,
+  STRING_AGG(dt.name, ', ') AS damages
+FROM vehicles v
+JOIN DamageReports dr 
+  ON v.vehicleid = dr.vehicleid
+JOIN damagetypes dt 
+  ON dr.damagetypeid = dt.damagetypeid
+GROUP BY v.vehicleid, v.make, v.model, dr.bookingid,v.isinmaintenance,v.isactive,v.year,dr.reportdate, dr.damageid
+ORDER BY dr.bookingid DESC
+
+`;
 
 export {
   addVehicleQuery,
@@ -144,4 +202,6 @@ export {
   getPopularCategoriesQuery,
   countTotalVehicleByCategoryQuery,
   getFiltersQuery,
+  getPopularVehiclesQuery,
+  getDamageReportQuery,
 };

@@ -7,8 +7,13 @@ const registerUserQuery = `
     phonenumber, 
     email, 
     driverslicense, 
-    password) 
-    VALUES ($1, $2, $3, $4, $5,$6)
+    password,
+    licenseissuedate,
+    licenseexpirydate,
+    usertype,
+    licensecode
+    ) 
+    VALUES ($1, $2, $3, $4, $5,$6,$7,$8,2,$9)
  RETURNING customerid`;
 
 const registerStaffQuery = `
@@ -42,7 +47,10 @@ const updateProfileQuery = `
     address = $2,
     phonenumber = $3,
     email = $4,
-    driverslicense = $5
+    driverslicense = $5,
+    licensecode = $7,
+    licenseissuedate = $8,
+    licenseexpirydate = $9
   WHERE customerid = $6
   RETURNING customerid;
 `;
@@ -57,6 +65,10 @@ const updateStaffProfileQuery = `
   RETURNING staffid;
 `;
 
+const getOldPasswordQuery = `SELECT password FROM customers WHERE customerid = $1`;
+
+const updatePasswordQuery = `UPDATE customers SET password = $1 WHERE customerid = $2`;
+
 export {
   checkEmailExistQuery,
   registerUserQuery,
@@ -68,4 +80,6 @@ export {
   checkStaffEmailExistQuery,
   updateStaffProfileQuery,
   getFrequentCustomersQuery,
+  getOldPasswordQuery,
+  updatePasswordQuery,
 };

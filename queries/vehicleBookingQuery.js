@@ -114,7 +114,18 @@ WHERE invoiceid = $2;`;
 const payInvoiceQuery = `UPDATE invoices 
 SET paymentstatus = 'Paid'
 WHERE invoiceid = $1
-RETURNING invoiceid`;
+RETURNING invoiceid,amount,damages,latefees`;
+
+const generateReceiptQuery = `
+  INSERT INTO receipts (invoiceid, amountpaid)
+  VALUES ($1, $2)
+  RETURNING receiptid;
+`;
+
+const getReceiptByInvoiceIdQuery = `
+SELECT * FROM receipts
+WHERE invoiceid = $1
+`;
 
 const checkInvoiceExistQuery = `SELECT invoiceid FROM Invoices WHERE bookingid = $1;`;
 
@@ -161,11 +172,14 @@ const getRentalHistoryQuery = `SELECT
   b.dropoffdate,
   b.pickuplocation,
   b.dropofflocation,
-  b.status
+  b.status,
+  i.invoiceid,
+  i.paymentstatus
 FROM Bookings b
 JOIN Vehicles v ON b.vehicleid = v.vehicleid
+LEFT JOIN Invoices i ON i.bookingid = b.bookingid
 WHERE b.customerid = $1
-  AND b.status IN('Completed','Cancelled','Overdue')
+  AND b.status IN('Completed','Cancel','Overdue')
 ORDER BY bookingid DESC;`;
 
 const getAllBookingsQuery = `SELECT  v.*,b.*,c.*
@@ -201,9 +215,13 @@ const getOverdueReturnsQuery = `SELECT
     b.dropoffdate,
     b.actualreturndate,
     CASE 
-        WHEN b.actualreturndate IS NULL AND b.dropoffdate < CURRENT_DATE 
+        WHEN b.actualreturndate > b.dropoffdate AND status = 'Overdue'
         THEN 'Overdue'
-        ELSE 'On Time'
+        WHEN status = 'Completed'
+        THEN 'On Time'
+		WHEN status = 'Cancel'
+        THEN 'Cancelled'
+        ELSE 'Other'
     END AS return_status
 FROM bookings b
 JOIN customers c ON b.customerid = c.customerid
@@ -226,6 +244,59 @@ const updateHasBeenNotifiedBookingQuery = `UPDATE bookings
 set hasBeenNotified = true
 WHERE bookingid = $1
 RETURNING bookingid`;
+
+const cancelBookingQuery = `UPDATE bookings
+set Status = $1
+WHERE bookingid = $2
+RETURNING bookingid`;
+
+const getBookedDatesByVehicleIdQuery = `
+SELECT pickupdate, dropoffdate
+FROM Bookings
+WHERE VehicleID = $1
+AND status IN ('Pending', 'Active');
+`;
+
+const getRevenuePerYearQuery = `
+SELECT 
+  SUM(COALESCE(i.amount,0) + COALESCE(i.latefees, 0) + COALESCE(i.damages, 0)) AS revenue,
+  EXTRACT(YEAR FROM b.pickupdate) as year
+FROM invoices i
+JOIN bookings b ON i.bookingid = b.bookingid
+WHERE i.paymentstatus = 'Paid' 
+GROUP BY year
+ORDER BY year
+`;
+
+const getBookingsPerYearQuery = `
+SELECT 
+  EXTRACT(YEAR FROM b.pickupdate) AS year,
+  COUNT(b.bookingid) AS value
+FROM bookings b
+GROUP BY year
+ORDER BY year;
+`;
+
+const getCostPerYearQuery = `
+SELECT 
+  SUM(COALESCE(dr.charge,0)) AS cost,
+  EXTRACT(YEAR FROM b.pickupdate) as year
+FROM damagereports dr
+JOIN bookings b ON dr.bookingid = b.bookingid
+GROUP BY year
+ORDER BY year
+`;
+
+const getRevenueByMonthQuery = `
+SELECT 
+  SUM(COALESCE(i.amount,0) + COALESCE(i.latefees, 0) + COALESCE(i.damages, 0)) AS revenue,
+  TO_CHAR(b.pickupdate, 'YYYY-MM') AS date
+FROM invoices i
+JOIN bookings b ON i.bookingid = b.bookingid
+WHERE i.paymentstatus = 'Paid' 
+GROUP BY date
+ORDER BY date
+`;
 
 export {
   reserveVehicleQuery,
@@ -252,4 +323,12 @@ export {
   getRentalByMonthsQuery,
   getBookingByCustomerIDQuery,
   updateHasBeenNotifiedBookingQuery,
+  cancelBookingQuery,
+  getBookedDatesByVehicleIdQuery,
+  getRevenuePerYearQuery,
+  getBookingsPerYearQuery,
+  getCostPerYearQuery,
+  getRevenueByMonthQuery,
+  generateReceiptQuery,
+  getReceiptByInvoiceIdQuery,
 };

@@ -16,6 +16,8 @@ import {
   getPopularCategories,
   countTotalVehicleByCategory,
   getFilters,
+  getPopularVehicles,
+  getDamageReport,
 } from "../controllers/vehicleManagementController.js";
 
 const vehicleRouter = express.Router(); //use to create get,post, etc methods
@@ -29,7 +31,9 @@ vehicleRouter.get("/countActiveVehicles", countActiveVehicles);
 vehicleRouter.get("/countMaintainedVehicles", countMaintainedVehicles);
 vehicleRouter.get("/countRentedVehicles", countRentedVehicles);
 vehicleRouter.get("/popularCategories", getPopularCategories);
+vehicleRouter.get("/popularVehicles", getPopularVehicles);
 vehicleRouter.get("/maintenance", getVehiclesInMaintenance);
+vehicleRouter.get("/DamageReport", getDamageReport);
 vehicleRouter.get("/filters", getFilters);
 vehicleRouter.get("/:vehicleid", getVehicleById);
 vehicleRouter.post("/add", addVehicle);
